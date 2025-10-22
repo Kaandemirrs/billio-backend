@@ -1,0 +1,23 @@
+# Core
+fastapi==0.104.1
+uvicorn==0.24.0
+python-dotenv==1.0.0
+
+# Firebase
+firebase-admin==6.2.0
+
+# Supabase (daha eski stabil versiyon)
+supabase==1.0.4
+
+# Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Utils
+python-multipart==0.0.6
+
+# HTTPX (Supabase için)
+httpx==0.24.1
+
+# Payment Webhooks
+stripe==7.10.0
