@@ -1,6 +1,7 @@
 import firebase_admin
 from firebase_admin import credentials, auth
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,21 +13,41 @@ def initialize_firebase():
         # Zaten initialize edilmişse tekrar etme
         firebase_admin.get_app()
         print("✅ Firebase zaten başlatılmış")
+        return
     except ValueError:
-        # Service account key path
-        cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
-        
-        if not cred_path or not os.path.exists(cred_path):
-            raise FileNotFoundError(
-                f"Firebase service account key bulunamadı: {cred_path}"
-            )
-        
-        # Credentials
-        cred = credentials.Certificate(cred_path)
-        
-        # Initialize
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase Admin SDK başlatıldı")
+        # Devam edip initialize etmeye çalış
+        pass
+
+    # 1) JSON içerikten initialize (Render env: FIREBASE_CREDENTIALS_JSON)
+    json_str = os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if json_str:
+        try:
+            service_account_info = json.loads(json_str)
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK başlatıldı (JSON env)")
+            return
+        except json.JSONDecodeError as e:
+            print(f"⚠️ FIREBASE_CREDENTIALS_JSON parse error: {e}")
+        except Exception as e:
+            print(f"⚠️ Firebase init error with JSON credentials: {e}")
+
+    # 2) Dosya yolundan initialize (FIREBASE_SERVICE_ACCOUNT_PATH veya GOOGLE_APPLICATION_CREDENTIALS)
+    cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        try:
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK başlatıldı (file path)")
+            return
+        except Exception as e:
+            print(f"⚠️ Firebase init error with credential file: {e}")
+            raise
+
+    # 3) Hiçbiri yoksa anlamlı hata ver
+    raise FileNotFoundError(
+        "Firebase credentials not provided. Set FIREBASE_CREDENTIALS_JSON or FIREBASE_SERVICE_ACCOUNT_PATH/GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
 # Token verification
 async def verify_firebase_token(token: str) -> dict:
