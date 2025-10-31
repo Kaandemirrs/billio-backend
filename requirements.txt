@@ -21,3 +21,6 @@ httpx==0.24.1
 
 # Payment Webhooks
 stripe==7.10.0
+
+# AI Services
+google-generativeai==0.3.2

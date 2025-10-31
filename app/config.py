@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     SUPABASE_SERVICE_KEY: str
     
+    # AI Services
+    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_SEARCH_API_KEY: Optional[str] = None
+    GOOGLE_SEARCH_ENGINE_ID: Optional[str] = None
+    
     # API
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8080"

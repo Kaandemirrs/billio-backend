@@ -1,0 +1,76 @@
+import os
+import httpx
+from typing import List, Dict, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+class GoogleSearchService:
+    def __init__(self):
+        self.api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
+        self.search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "017576662512468239146:omuauf_lfve")  # Default CSE ID
+        self.base_url = "https://www.googleapis.com/customsearch/v1"
+        
+        if not self.api_key:
+            logger.warning("GOOGLE_SEARCH_API_KEY environment variable not found")
+    
+    async def search_google(self, query: str, num_results: int = 5) -> List[Dict]:
+        """
+        Google Custom Search API kullanarak arama yapar
+        
+        Args:
+            query (str): Arama sorgusu
+            num_results (int): Döndürülecek sonuç sayısı (maksimum 10)
+            
+        Returns:
+            List[Dict]: Arama sonuçları listesi
+        """
+        if not self.api_key:
+            logger.error("Google Search API key not configured")
+            return []
+        
+        if not query or not query.strip():
+            logger.warning("Empty search query provided")
+            return []
+        
+        try:
+            params = {
+                "key": self.api_key,
+                "cx": self.search_engine_id,
+                "q": query.strip(),
+                "num": min(num_results, 10)  # Google API maksimum 10 sonuç döner
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(self.base_url, params=params)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # Sonuçları işle
+                results = []
+                if "items" in data:
+                    for item in data["items"]:
+                        result = {
+                            "title": item.get("title", ""),
+                            "link": item.get("link", ""),
+                            "snippet": item.get("snippet", ""),
+                            "displayLink": item.get("displayLink", "")
+                        }
+                        results.append(result)
+                
+                logger.info(f"Google search completed for query: '{query}', found {len(results)} results")
+                return results
+                
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Google Search API HTTP error: {e.response.status_code} - {e.response.text}")
+            return []
+        except httpx.TimeoutException:
+            logger.error("Google Search API request timeout")
+            return []
+        except Exception as e:
+            logger.error(f"Google Search API error: {str(e)}")
+            return []
+
+# Singleton instance
+google_search_service = GoogleSearchService()
