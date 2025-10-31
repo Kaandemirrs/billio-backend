@@ -209,6 +209,8 @@ async def analyze_subscriptions(
                     context_parts.append(f"  Kaynak {j}: {result.get('title', '')} - {result.get('snippet', '')}")
         
         context = "\n".join(context_parts) if context_parts else "İndirim bilgisi bulunamadı."
+        # Debug Log 1: Google'dan Ne Geldi?
+        print(f"GOOGLE_SEARCH SONUÇLARI: {context}")
         
         # Kullanıcı verilerini özetle
         total_monthly = sum(float(sub.amount) for sub in request.subscriptions if sub.is_active and sub.billing_cycle == "monthly")
@@ -247,6 +249,9 @@ KURALLAR:
 YANIT:
 """
         
+        # Debug Log 2: AI'a Ne Gitti?
+        print(f"GEMINI'YE GİDEN PROMPT: {gemini_prompt}")
+
         # Gemini'ye sor
         analysis = await gemini_service.ask_gemini(context=context, prompt=gemini_prompt)
         
