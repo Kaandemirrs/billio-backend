@@ -32,8 +32,8 @@ class GeminiService:
             aiplatform.init(project=project_id, location=location, credentials=credentials)
             vertexai.init(project=project_id, location=location, credentials=credentials)
 
-            # Use stable, widely available Gemini model via Vertex AI
-            self.model = GenerativeModel("gemini-1.0-pro-001")
+            # Use auto-updated stable alias for Gemini via Vertex AI
+            self.model = GenerativeModel("gemini-2.0-flash")
             logger.info("Vertex AI (Gemini) configured successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {str(e)}")
