@@ -33,3 +33,26 @@ class Settings(BaseSettings):
 
 # Settings instance
 settings = Settings()
+import logging
+logger = logging.getLogger(__name__)
+
+# --- YENİ DEBUG KODU ---
+logger.warning("--- ÇEVRE DEĞİŞKENLERİ KONTROL EDİLİYOR ---")
+
+if settings.GOOGLE_SEARCH_API_KEY:
+    logger.warning("Config Check: GOOGLE_SEARCH_API_KEY başarıyla yüklendi.")
+else:
+    logger.error("Config Check: HATA! GOOGLE_SEARCH_API_KEY bulunamadı!")
+
+if settings.GOOGLE_SEARCH_ENGINE_ID:
+    logger.warning("Config Check: GOOGLE_SEARCH_ENGINE_ID başarıyla yüklendi.")
+else:
+    logger.error("Config Check: HATA! GOOGLE_SEARCH_ENGINE_ID bulunamadı!")
+
+if settings.VERTEX_AI_SERVICE_ACCOUNT_JSON:
+    logger.warning("Config Check: VERTEX_AI_SERVICE_ACCOUNT_JSON başarıyla yüklendi.")
+else:
+    logger.error("Config Check: HATA! VERTEX_AI_SERVICE_ACCOUNT_JSON bulunamadı!")
+
+logger.warning("--- KONTROL TAMAMLANDI ---")
+# --- BİTTİ ---
