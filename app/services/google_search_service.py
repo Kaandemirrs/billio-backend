@@ -1,18 +1,20 @@
-import os
 import httpx
 from typing import List, Dict, Optional
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class GoogleSearchService:
     def __init__(self):
-        self.api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
-        self.search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "017576662512468239146:omuauf_lfve")  # Default CSE ID
+        self.api_key = settings.GOOGLE_SEARCH_API_KEY
+        self.search_engine_id = settings.GOOGLE_SEARCH_ENGINE_ID
         self.base_url = "https://www.googleapis.com/customsearch/v1"
         
         if not self.api_key:
-            logger.warning("GOOGLE_SEARCH_API_KEY environment variable not found")
+            logger.warning("Google Search API key not configured in settings (GOOGLE_SEARCH_API_KEY)")
+        if not self.search_engine_id:
+            logger.warning("Google Search Engine ID not configured in settings (GOOGLE_SEARCH_ENGINE_ID)")
     
     async def search_google(self, query: str, num_results: int = 5) -> List[Dict]:
         """
@@ -25,7 +27,7 @@ class GoogleSearchService:
         Returns:
             List[Dict]: Arama sonuçları listesi
         """
-        if not self.api_key:
+        if not self.api_key or not self.search_engine_id:
             logger.error("Google Search API key not configured")
             return []
         

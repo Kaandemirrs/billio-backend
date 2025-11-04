@@ -6,6 +6,7 @@ from google.cloud import aiplatform
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.oauth2.service_account import Credentials
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,9 @@ class GeminiService:
     def __init__(self):
         self.model = None
         try:
-            sa_json_str = os.getenv("VERTEX_AI_SERVICE_ACCOUNT_JSON")
+            sa_json_str = settings.VERTEX_AI_SERVICE_ACCOUNT_JSON
             if not sa_json_str:
-                logger.warning("VERTEX_AI_SERVICE_ACCOUNT_JSON environment variable not found")
+                logger.warning("VERTEX_AI_SERVICE_ACCOUNT_JSON not configured in settings")
                 return
 
             sa_info = json.loads(sa_json_str)
