@@ -182,9 +182,9 @@ async def analyze_subscriptions(
                 }
             }
         
-        # Her abonelik için Google'da indirim/kampanya ara (yalnızca predefined_bills dolu olanlar)
+        # Her "Premium" marka (predefined_bills dolu olanlar) için birden fazla Google sorgusu çalıştır
         search_tasks = []
-        searched_subscriptions = []
+        tasks_meta = []  # Her görev için (subscription, display_name, sorgu_türü) bilgisini tutar
         for subscription in request.subscriptions:
             if subscription.is_active:
                 predefined_bills = getattr(subscription, "predefined_bills", None)
@@ -196,9 +196,20 @@ async def analyze_subscriptions(
                         display_name = getattr(predefined_bills, "display_name", None)
 
                     if display_name and isinstance(display_name, str) and display_name.strip():
-                        query = f"{display_name} Türkiye indirim kampanya promosyon kod"
-                        search_tasks.append(google_search_service.search_google(query, num_results=3))
-                        searched_subscriptions.append(subscription)
+                        # Genişletilmiş sorgular
+                        queries = [
+                            (f"{display_name} güncel fiyatları", "güncel fiyatları"),
+                            (f"{display_name} öğrenci planı", "öğrenci planı"),
+                            (f"{display_name} aile planı", "aile planı"),
+                        ]
+
+                        for q, label in queries:
+                            search_tasks.append(google_search_service.search_google(q, num_results=3))
+                            tasks_meta.append({
+                                "subscription": subscription,
+                                "display_name": display_name,
+                                "label": label,
+                            })
         
         # Paralel olarak tüm aramaları yap
         if search_tasks:
@@ -208,22 +219,31 @@ async def analyze_subscriptions(
         
         # Tüm Google sonuçlarını birleştir
         context_parts = []
-        
-        for i, (subscription, search_results) in enumerate(zip(searched_subscriptions, search_results_list)):
-            if isinstance(search_results, Exception):
+        # Sonuçları marka bazında grupla
+        grouped_results = {}
+        for meta, results in zip(tasks_meta, search_results_list):
+            if isinstance(results, Exception) or not results:
                 continue
-                
-            if search_results:
-                # Label'ı display_name ile tercih et
-                predefined_bills = getattr(subscription, "predefined_bills", None)
-                if isinstance(predefined_bills, dict):
-                    display_name = predefined_bills.get("display_name") or subscription.name
-                else:
-                    display_name = getattr(predefined_bills, "display_name", None) or subscription.name
+            sub_id = getattr(meta["subscription"], "id", None) or id(meta["subscription"])  # güvenli key
+            if sub_id not in grouped_results:
+                grouped_results[sub_id] = {
+                    "display_name": meta["display_name"] or meta["subscription"].name,
+                    "groups": []
+                }
+            grouped_results[sub_id]["groups"].append({
+                "label": meta["label"],
+                "results": results
+            })
 
-                context_parts.append(f"\n{display_name} İNDİRİM BİLGİLERİ:")
-                for j, result in enumerate(search_results, 1):
-                    context_parts.append(f"  Kaynak {j}: {result.get('title', '')} - {result.get('snippet', '')}")
+        # Grupları bağlama dönüştür
+        for brand in grouped_results.values():
+            context_parts.append(f"\n{brand['display_name']} BİLGİLER:")
+            for group in brand["groups"]:
+                context_parts.append(f"  {group['label'].upper()}:")
+                for j, result in enumerate(group["results"], 1):
+                    context_parts.append(
+                        f"    Kaynak {j}: {result.get('title', '')} - {result.get('snippet', '')}"
+                    )
         
         context = "\n".join(context_parts) if context_parts else "İndirim bilgisi bulunamadı."
         # Debug Log 1: Google'dan Ne Geldi?
