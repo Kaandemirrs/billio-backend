@@ -1,25 +1,41 @@
 import os
-import google.generativeai as genai
+import json
 from typing import Optional
 import logging
+from google.cloud import aiplatform
+import vertexai
+from vertexai.generative_models import GenerativeModel
+from google.oauth2.service_account import Credentials
 
 logger = logging.getLogger(__name__)
 
 class GeminiService:
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
         self.model = None
-        
-        if self.api_key:
-            try:
-                genai.configure(api_key=self.api_key)
-                # Use latest, fast Gemini model for text: gemini-1.5-flash
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
-                logger.info("Gemini API configured successfully")
-            except Exception as e:
-                logger.error(f"Failed to configure Gemini API: {str(e)}")
-        else:
-            logger.warning("GEMINI_API_KEY environment variable not found")
+        try:
+            sa_json_str = os.getenv("VERTEX_AI_SERVICE_ACCOUNT_JSON")
+            if not sa_json_str:
+                logger.warning("VERTEX_AI_SERVICE_ACCOUNT_JSON environment variable not found")
+                return
+
+            sa_info = json.loads(sa_json_str)
+            credentials = Credentials.from_service_account_info(sa_info)
+            project_id = sa_info.get("project_id")
+            location = os.getenv("VERTEX_AI_LOCATION", "us-central1")
+
+            if not project_id:
+                logger.error("Service account JSON missing 'project_id'")
+                return
+
+            # Initialize Vertex AI
+            aiplatform.init(project=project_id, location=location, credentials=credentials)
+            vertexai.init(project=project_id, location=location, credentials=credentials)
+
+            # Use latest fast Gemini model via Vertex AI
+            self.model = GenerativeModel("gemini-1.5-flash")
+            logger.info("Vertex AI (Gemini) configured successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Vertex AI: {str(e)}")
     
     async def ask_gemini(self, context: str, prompt: str) -> Optional[str]:
         """
@@ -43,17 +59,17 @@ class GeminiService:
         try:
             # RAG prompt'u oluştur
             full_prompt = self._build_rag_prompt(context, prompt)
-            
-            # Gemini'ye istek gönder
+
+            # Gemini'ye istek gönder (sync call wrapped in async function)
             response = await self._generate_content_async(full_prompt)
-            
-            if response and response.text:
+
+            if response and getattr(response, "text", None):
                 logger.info(f"Gemini response generated successfully for prompt: '{prompt[:50]}...'")
                 return response.text.strip()
             else:
                 logger.warning("Empty response from Gemini")
                 return None
-                
+
         except Exception as e:
             logger.error(f"Gemini API error: {str(e)}")
             return None
@@ -109,8 +125,7 @@ YANIT:
             Response object veya None
         """
         try:
-            # Gemini API şu anda doğrudan async desteklemiyor
-            # Bu yüzden sync versiyonu kullanıyoruz
+            # Vertex AI client currently provides sync generate_content; call it within async flow
             response = self.model.generate_content(prompt)
             return response
         except Exception as e:
