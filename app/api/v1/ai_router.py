@@ -182,12 +182,23 @@ async def analyze_subscriptions(
                 }
             }
         
-        # Her abonelik için Google'da indirim/kampanya ara
+        # Her abonelik için Google'da indirim/kampanya ara (yalnızca predefined_bills dolu olanlar)
         search_tasks = []
+        searched_subscriptions = []
         for subscription in request.subscriptions:
-            if subscription.is_active:  # Sadece aktif abonelikler için ara
-                query = f"{subscription.name} Türkiye indirim kampanya promosyon kod"
-                search_tasks.append(google_search_service.search_google(query, num_results=3))
+            if subscription.is_active:
+                predefined_bills = getattr(subscription, "predefined_bills", None)
+                if predefined_bills:
+                    # display_name'i güvenli şekilde al
+                    if isinstance(predefined_bills, dict):
+                        display_name = predefined_bills.get("display_name")
+                    else:
+                        display_name = getattr(predefined_bills, "display_name", None)
+
+                    if display_name and isinstance(display_name, str) and display_name.strip():
+                        query = f"{display_name} Türkiye indirim kampanya promosyon kod"
+                        search_tasks.append(google_search_service.search_google(query, num_results=3))
+                        searched_subscriptions.append(subscription)
         
         # Paralel olarak tüm aramaları yap
         if search_tasks:
@@ -197,14 +208,20 @@ async def analyze_subscriptions(
         
         # Tüm Google sonuçlarını birleştir
         context_parts = []
-        active_subscriptions = [sub for sub in request.subscriptions if sub.is_active]
         
-        for i, (subscription, search_results) in enumerate(zip(active_subscriptions, search_results_list)):
+        for i, (subscription, search_results) in enumerate(zip(searched_subscriptions, search_results_list)):
             if isinstance(search_results, Exception):
                 continue
                 
             if search_results:
-                context_parts.append(f"\n{subscription.name} İNDİRİM BİLGİLERİ:")
+                # Label'ı display_name ile tercih et
+                predefined_bills = getattr(subscription, "predefined_bills", None)
+                if isinstance(predefined_bills, dict):
+                    display_name = predefined_bills.get("display_name") or subscription.name
+                else:
+                    display_name = getattr(predefined_bills, "display_name", None) or subscription.name
+
+                context_parts.append(f"\n{display_name} İNDİRİM BİLGİLERİ:")
                 for j, result in enumerate(search_results, 1):
                     context_parts.append(f"  Kaynak {j}: {result.get('title', '')} - {result.get('snippet', '')}")
         
