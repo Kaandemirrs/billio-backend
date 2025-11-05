@@ -98,6 +98,8 @@ async def get_price(
             context_parts.append(f"Kaynak {i}: {result.get('title', '')} - {result.get('snippet', '')}")
         
         context = "\n".join(context_parts)
+        # Debug Log: Google'dan Ne Geldi?
+        print(f"GOOGLE_SEARCH SONUÇLARI: {context}")
         
         # Gemini prompt'u oluştur
         gemini_prompt = (
@@ -107,6 +109,8 @@ async def get_price(
             " (Örn: 'AI, Netflix'in Standart planını 149.99 TL olarak buldu...')."
             " BAĞLAM içinde net bir fiyat bulamazsan, 'Güncel fiyat bilgisi bulunamadı.' döndür."
         )
+        # Debug Log: AI'a Ne Gitti?
+        print(f"GEMINI'YE GİDEN PROMPT: {gemini_prompt}")
         
         # Gemini'ye sor
         price_response = await gemini_service.ask_gemini(context=context, prompt=gemini_prompt)
