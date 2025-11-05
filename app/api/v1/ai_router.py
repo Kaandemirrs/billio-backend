@@ -99,11 +99,12 @@ async def get_price(
         context = "\n".join(context_parts)
         
         # Gemini prompt'u oluştur
-        gemini_prompt = f"""
-BAĞLAM: {context}
-
-GÖREV: Bu bağlamdan {request.service_name} için 'Premium', 'Bireysel' veya 'Standart' (Aile/Duo/Öğrenci OLMAYAN) planın aylık fiyatını bul. Sadece sayıyı (örn: 59.99) döndür. Bulamazsan 'null' döndür.
-"""
+        gemini_prompt = (
+            f"BAĞLAM: {context}\n"
+            f"GÖREV: Sadece yukarıdaki BAĞLAM metnini kullanarak, '{request.service_name}' için 'ücretsiz' (free) OLMAYAN en ucuz aylık abonelik planının fiyatını bul."
+            " 'Aile', 'Duo' veya 'Yıllık' planları DEĞİL, 'Bireysel' (örn: Standard, Premium, 50GB, Bireysel) planı önceliklendir."
+            " Sadece Türkiye (TRY) fiyatını belirten sayıyı (örn: 12.99) döndür. BAĞLAM içinde net bir fiyat bulamazsan 'null' döndür."
+        )
         
         # Gemini'ye sor
         price_response = await gemini_service.ask_gemini(context=context, prompt=gemini_prompt)
