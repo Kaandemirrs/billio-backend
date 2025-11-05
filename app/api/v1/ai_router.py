@@ -102,17 +102,7 @@ async def get_price(
         gemini_prompt = f"""
 BAĞLAM: {context}
 
-GÖREV: Bu bağlamdan {request.service_name} için aylık standart plan fiyatını bul. 
-
-KURALLAR:
-1. Sadece Türkiye fiyatlarını dikkate al
-2. Aylık abonelik fiyatını ara
-3. Sadece sayısal değeri döndür (örn: 149.99)
-4. Para birimi belirtme
-5. Eğer net bir fiyat bulamazsan 'null' döndür
-6. Birden fazla fiyat varsa en yaygın olanı seç
-
-YANIT (sadece sayı veya null):
+GÖREV: Bu bağlamdan {request.service_name} için 'Premium', 'Bireysel' veya 'Standart' (Aile/Duo/Öğrenci OLMAYAN) planın aylık fiyatını bul. Sadece sayıyı (örn: 59.99) döndür. Bulamazsan 'null' döndür.
 """
         
         # Gemini'ye sor
