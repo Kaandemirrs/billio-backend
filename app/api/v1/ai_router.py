@@ -83,11 +83,12 @@ async def get_price(
             logger.warning(f"No Google search results found for: {search_query}")
             return {
                 "success": True,
-                "message": "Fiyat bilgisi bulunamadı",
+                "message": "Fiyat araması tamamlandı",
                 "data": {
-                    "suggested_price": None,
+                    "price_analysis_text": "Güncel fiyat bilgisi bulunamadı.",
                     "service_name": request.service_name,
-                    "search_performed": True
+                    "search_performed": True,
+                    "sources_found": 0
                 }
             }
         
@@ -101,31 +102,28 @@ async def get_price(
         # Gemini prompt'u oluştur
         gemini_prompt = (
             f"BAĞLAM: {context}\n"
-            f"GÖREV: Sadece yukarıdaki BAĞLAM metnini kullanarak, '{request.service_name}' için 'ücretsiz' (free) OLMAYAN en ucuz aylık abonelik planının fiyatını bul."
-            " 'Aile', 'Duo' veya 'Yıllık' planları DEĞİL, 'Bireysel' (örn: Standard, Premium, 50GB, Bireysel) planı önceliklendir."
-            " Sadece Türkiye (TRY) fiyatını belirten sayıyı (örn: 12.99) döndür. BAĞLAM içinde net bir fiyat bulamazsan 'null' döndür."
+            f"GÖREV: Sadece yukarıdaki BAĞLAM metnini kullanarak, '{request.service_name}' için 'Bireysel', 'Standart' veya 'en ucuz ücretli' planların"
+            " fiyatlarını özetleyen BİR PARAGRAFLIK kısa bir 'yazı' (analiz metni) yaz. Kullanıcıya hangi planın ne kadar olduğunu söyle."
+            " (Örn: 'AI, Netflix'in Standart planını 149.99 TL olarak buldu...')."
+            " BAĞLAM içinde net bir fiyat bulamazsan, 'Güncel fiyat bilgisi bulunamadı.' döndür."
         )
         
         # Gemini'ye sor
         price_response = await gemini_service.ask_gemini(context=context, prompt=gemini_prompt)
         
-        # Yanıtı işle
-        suggested_price = None
-        if price_response and price_response.strip().lower() != 'null':
-            try:
-                # Sayısal değeri çıkarmaya çalış
-                price_str = price_response.strip().replace(',', '.')
-                suggested_price = float(price_str)
-            except (ValueError, TypeError):
-                logger.warning(f"Could not parse price from Gemini response: {price_response}")
+        # Yanıtı işle (özet metin)
+        price_analysis_text = None
+        if price_response:
+            text = price_response.strip()
+            price_analysis_text = text if text else None
         
-        logger.info(f"Price search completed for {request.service_name}: {suggested_price}")
+        logger.info(f"Price search completed for {request.service_name}")
         
         return {
             "success": True,
             "message": "Fiyat araması tamamlandı",
             "data": {
-                "suggested_price": suggested_price,
+                "price_analysis_text": price_analysis_text or "Güncel fiyat bilgisi bulunamadı.",
                 "service_name": request.service_name,
                 "search_performed": True,
                 "sources_found": len(google_results)
