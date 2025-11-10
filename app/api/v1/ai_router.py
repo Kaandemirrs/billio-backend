@@ -9,6 +9,9 @@ from app.models.response import ApiResponse
 from app.models.subscription import SubscriptionResponse
 from app.services.google_search_service import google_search_service
 from app.services.gemini_service import gemini_service
+from app.services.user_service import user_service
+from app.services.notification_service import notification_service
+from app.services.notification_pusher_service import send_push_notification
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +302,42 @@ Detaylı analiz için lütfen tekrar deneyin.
 """.format(total_monthly)
         
         logger.info(f"Subscription analysis completed for user {firebase_uid}")
-        
+
+        # Bildirimi oluştur ve push gönder (savings_opportunity)
+        try:
+            # User ID al
+            user = await user_service.get_user_by_firebase_uid(firebase_uid)
+            if user and user.get("id"):
+                user_id = user.get("id")
+                title = "Yeni bir tasarruf önerisi bulduk!"
+                # Mesajı çok uzun olmaması için kısalt
+                message = (analysis or "Tasarruf önerisi bulundu.")
+                message = message.strip()
+                if len(message) > 200:
+                    message = message[:197] + "..."
+
+                # Notifications tablosuna INSERT
+                await notification_service.create_test_notification(
+                    user_id=user_id,
+                    type="savings_opportunity",
+                    title=title,
+                    message=message,
+                    action_type=None,
+                    action_data=None
+                )
+
+                # FCM token'ı çek ve push gönder
+                try:
+                    fcm_token = await user_service.get_fcm_token_by_user_id(user_id)
+                    if fcm_token:
+                        await send_push_notification(fcm_token, title, message)
+                except Exception:
+                    # Push gönderimi başarısız olsa bile akışı bozma
+                    pass
+        except Exception:
+            # Bildirim/push hataları ana akışı bozmasın
+            pass
+
         return {
             "success": True,
             "message": "Finansal analiz tamamlandı",
