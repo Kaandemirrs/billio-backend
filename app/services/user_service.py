@@ -336,6 +336,20 @@ class UserService:
         except Exception as e:
             raise Exception(f"Supabase error: {str(e)}")
 
+    async def get_fcm_token_by_user_id(self, user_id: str) -> Optional[str]:
+        """
+        Get the user's FCM token by user UUID
+        """
+        try:
+            result = self.supabase.table("users").select("fcm_token").eq(
+                "id", user_id
+            ).execute()
+            if result.data and len(result.data) > 0:
+                return result.data[0].get("fcm_token")
+            return None
+        except Exception as e:
+            raise Exception(f"Supabase error: {str(e)}")
+
 # Singleton instance
 user_service = UserService()
 

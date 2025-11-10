@@ -8,6 +8,7 @@ from app.models.notification import (
 )
 from app.services.notification_service import notification_service
 from app.services.user_service import user_service
+from app.services.notification_pusher_service import send_push_notification
 
 router = APIRouter()
 
@@ -489,6 +490,15 @@ async def create_test_notification(
             action_type=request.action_type,
             action_data=request.action_data
         )
+
+        # Cihaz push bildirimi gönder (varsa)
+        try:
+            fcm_token = await user_service.get_fcm_token_by_user_id(user_id)
+            if fcm_token:
+                await send_push_notification(fcm_token, request.title, request.message)
+        except Exception:
+            # Push gönderimi başarısız olsa bile API akışını bozma
+            pass
         
         return {
             "success": True,
