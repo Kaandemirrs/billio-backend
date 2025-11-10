@@ -7,7 +7,8 @@ from app.models.user import (
     DeleteAccountRequest,
     RequestPhoneVerificationRequest,  # Yeni
     VerifyPhoneRequest,  # Yeni
-    UpdateSettingsRequest
+    UpdateSettingsRequest,
+    RegisterDeviceRequest
 )
 router = APIRouter()
 
@@ -549,6 +550,55 @@ async def update_settings(
             "data": updated_settings
         }
         
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "İşlem tamamlanamadı."
+                }
+            }
+        )
+
+@router.post("/user/register-device", response_model=ApiResponse)
+async def register_device(
+    request: RegisterDeviceRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Cihaz FCM token'ını kaydet
+    
+    Body: { fcm_token: string }
+    """
+    try:
+        firebase_uid = current_user.get("uid")
+        
+        if not firebase_uid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "INVALID_TOKEN",
+                        "message": "Token'da uid bulunamadı"
+                    }
+                }
+            )
+
+        result = await user_service.update_fcm_token(
+            firebase_uid=firebase_uid,
+            fcm_token=request.fcm_token
+        )
+
+        return {
+            "success": True,
+            "message": "FCM token güncellendi",
+            "data": result
+        }
     except HTTPException:
         raise
     except Exception:

@@ -309,6 +309,33 @@ class UserService:
         except Exception as e:
             raise Exception(f"Supabase error: {str(e)}")    
 
+    async def update_fcm_token(self, firebase_uid: str, fcm_token: str) -> dict:
+        """
+        Kullanıcının cihaz FCM token'ını güncelle
+        
+        Args:
+            firebase_uid: Firebase UID
+            fcm_token: FCM token (TEXT)
+        
+        Returns:
+            dict: {fcm_token, updated_at}
+        """
+        try:
+            from datetime import datetime
+            updated_at = datetime.utcnow().isoformat()
+            
+            self.supabase.table("users").update({
+                "fcm_token": fcm_token,
+                "last_login_at": updated_at  # opsiyonel: etkinlik güncellemesi
+            }).eq("firebase_uid", firebase_uid).execute()
+            
+            return {
+                "fcm_token": fcm_token,
+                "updated_at": updated_at
+            }
+        except Exception as e:
+            raise Exception(f"Supabase error: {str(e)}")
+
 # Singleton instance
 user_service = UserService()
 

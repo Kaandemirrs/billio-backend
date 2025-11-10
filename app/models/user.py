@@ -67,3 +67,14 @@ class UpdateSettingsRequest(BaseModel):
                 "theme": "dark"
             }
         }
+
+class RegisterDeviceRequest(BaseModel):
+    """Register device token request"""
+    fcm_token: str = Field(..., min_length=10)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "fcm_token": "fcm_token_example_abcdef123456"
+            }
+        }
