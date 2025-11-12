@@ -2,7 +2,9 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api.v1 import auth, user, subscriptions, analytics, ai, notifications, premium, categories, predefined_bills
+from app.api.v1 import auth, user, subscriptions, analytics, ai, notifications, premium, categories, predefined_bills, services_router
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.services.ai_cron_service import update_all_plan_prices
 from app.core.firebase import initialize_firebase
 from app.core.rate_limiter import rate_limiter
 from app.config import settings
@@ -214,6 +216,9 @@ AI analiz endpoint'leri otomatik mock veri döner. Gerçek AI entegrasyonu için
     ]
 )
 
+# APScheduler instance
+scheduler = AsyncIOScheduler()
+
 # CORS Middleware
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
@@ -296,6 +301,7 @@ app.include_router(notifications.router, prefix=settings.API_V1_PREFIX, tags=["N
 app.include_router(premium.router, prefix=settings.API_V1_PREFIX, tags=["Premium"])
 app.include_router(categories.router, prefix=settings.API_V1_PREFIX, tags=["Categories"])
 app.include_router(predefined_bills.router, prefix=settings.API_V1_PREFIX, tags=["Predefined Bills"])
+app.include_router(services_router.router, prefix=f"{settings.API_V1_PREFIX}/services", tags=["Services & Plans"]) 
 
 # Startup event
 @app.on_event("startup")
@@ -309,7 +315,34 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️ Firebase başlatılamadı: {e}")
 
+    # Cron Job: AI fiyat güncelleme
+    try:
+        if DEBUG_MODE:
+            # Test: her 4 saatte bir çalıştır
+            scheduler.add_job(update_all_plan_prices, "interval", hours=4)
+        else:
+            # Prod: Pazar günleri saat 03:00'te çalıştır
+            scheduler.add_job(update_all_plan_prices, "cron", day_of_week="sun", hour=3)
+        scheduler.start()
+        print("🕰️ APScheduler başlatıldı ve AI fiyat güncelleme job'ı eklendi.")
+
+        # Test için: başlangıçta bir kez hemen çalıştır
+        if DEBUG_MODE:
+            # İlk run (await)
+            try:
+                await update_all_plan_prices()
+                print("✅ İlk AI fiyat güncelleme çalıştırıldı (DEBUG mode)")
+            except Exception as e:
+                print(f"⚠️ İlk AI fiyat güncelleme başarısız: {e}")
+    except Exception as e:
+        print(f"⚠️ APScheduler başlatılamadı: {e}")
+
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     print("👋 Billio API kapatılıyor...")
+    try:
+        scheduler.shutdown(wait=False)
+        print("🛑 APScheduler durduruldu.")
+    except Exception as e:
+        print(f"⚠️ APScheduler durdurulamadı: {e}")

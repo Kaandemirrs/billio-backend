@@ -16,7 +16,7 @@ class GoogleSearchService:
         if not self.search_engine_id:
             logger.warning("Google Search Engine ID not configured in settings (GOOGLE_SEARCH_ENGINE_ID)")
     
-    async def search_google(self, query: str, num_results: int = 5) -> List[Dict]:
+    async def search_google(self, query: str, num_results: int = 5, gl: Optional[str] = None, lr: Optional[str] = None) -> List[Dict]:
         """
         Google Custom Search API kullanarak arama yapar
         
@@ -42,6 +42,10 @@ class GoogleSearchService:
                 "q": query.strip(),
                 "num": min(num_results, 10)  # Google API maksimum 10 sonuç döner
             }
+            if gl:
+                params["gl"] = gl
+            if lr:
+                params["lr"] = lr
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(self.base_url, params=params)

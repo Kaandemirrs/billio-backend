@@ -8,6 +8,22 @@ class SubscriptionService:
     
     def __init__(self):
         self.supabase = get_supabase_admin_client()
+
+    def _calculate_price_alert_status(self, subscription: Dict) -> str:
+        """"Senaryo 2: Zam Uyarısı" mantığını hesaplar."""
+        alert_status = "none"
+        try:
+            sp = subscription.get("service_plans")
+            if sp:
+                user_amount = Decimal(str(subscription.get("amount", 0)))
+                cached = sp.get("cached_price")
+                if cached is not None:
+                    cached_price = Decimal(str(cached))
+                    if cached_price > 0 and user_amount != cached_price:
+                        alert_status = "update_required"
+        except Exception:
+            alert_status = "none"
+        return alert_status
     
     async def get_subscriptions(
         self,
@@ -37,7 +53,7 @@ class SubscriptionService:
         try:
             # Query builder
             query = self.supabase.table("subscriptions").select(
-                "*, predefined_bills(display_name,icon_name,primary_color,secondary_color)", count="exact"
+                "*, service_plans(*)", count="exact"
             ).eq("user_id", user_id)
             
             # Filters
@@ -59,6 +75,12 @@ class SubscriptionService:
             
             subscriptions = result.data if result.data else []
             total_items = result.count if result.count else 0
+
+            # Akıllı Backend: price_alert_status hesapla
+            processed_subscriptions = []
+            for sub in subscriptions:
+                sub["price_alert_status"] = self._calculate_price_alert_status(sub)
+                processed_subscriptions.append(sub)
             
             # Summary hesapla
             summary = await self._calculate_summary(user_id)
@@ -67,7 +89,7 @@ class SubscriptionService:
             total_pages = (total_items + limit - 1) // limit if limit > 0 else 1
             
             return {
-                "subscriptions": subscriptions,
+                "subscriptions": processed_subscriptions,
                 "summary": summary,
                 "pagination": {
                     "page": page,
@@ -143,13 +165,15 @@ class SubscriptionService:
         """Tek bir aboneliği getir"""
         try:
             result = self.supabase.table("subscriptions").select(
-                "*, predefined_bills(display_name,icon_name,primary_color,secondary_color)"
+                "*, service_plans(*)"
             ).eq(
                 "id", subscription_id
             ).eq("user_id", user_id).execute()
             
             if result.data and len(result.data) > 0:
-                return result.data[0]
+                subscription = result.data[0]
+                subscription["price_alert_status"] = self._calculate_price_alert_status(subscription)
+                return subscription
             
             return None
             
@@ -174,23 +198,6 @@ class SubscriptionService:
             if "start_date" in subscription_data:
                 subscription_data["start_date"] = str(subscription_data["start_date"])
             
-            # Predefined bill eşleştirme (display_name ilike name)
-            bill = None
-            try:
-                bill_res = self.supabase.table("predefined_bills").select("*").ilike(
-                    "display_name", subscription_data.get("name")
-                ).limit(1).execute()
-                bill = bill_res.data[0] if bill_res.data else None
-            except Exception:
-                bill = None
-            
-            if bill:
-                subscription_data["predefined_bill_id"] = bill.get("id")
-                if not subscription_data.get("category"):
-                    subscription_data["category"] = bill.get("category") or "other"
-                if not subscription_data.get("color"):
-                    subscription_data["color"] = bill.get("primary_color") or "#6366f1"
-            
             # Insert
             result = self.supabase.table("subscriptions").insert(
                 subscription_data
@@ -200,7 +207,7 @@ class SubscriptionService:
                 inserted_id = result.data[0].get("id")
                 # Join ile geri döndür
                 joined = self.supabase.table("subscriptions").select(
-                    "*, predefined_bills(*)"
+                    "*, service_plans(*)"
                 ).eq("id", inserted_id).execute()
                 if joined.data and len(joined.data) > 0:
                     return joined.data[0]
@@ -234,13 +241,15 @@ class SubscriptionService:
             
             # SELECT ile tekrar al (join ile)
             result = self.supabase.table("subscriptions").select(
-                "*, predefined_bills(display_name,icon_name,primary_color,secondary_color)"
+                "*, service_plans(*)"
             ).eq(
                 "id", subscription_id
             ).eq("user_id", user_id).execute()
             
             if result.data and len(result.data) > 0:
-                return result.data[0]
+                subscription = result.data[0]
+                subscription["price_alert_status"] = self._calculate_price_alert_status(subscription)
+                return subscription
             
             return None
             

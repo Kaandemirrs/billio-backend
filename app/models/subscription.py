@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from app.models.services import ServicePlanReadBasic
 
 # Enums
 CATEGORIES = ["entertainment", "utilities", "productivity", "health", "finance", "education", "other"]
@@ -18,6 +19,7 @@ class CreateSubscriptionRequest(BaseModel):
     billing_cycle: str = Field(...)
     billing_day: int = Field(..., ge=1, le=31)
     start_date: date
+    service_plan_id: Optional[str] = None
     logo_url: Optional[str] = None
     color: Optional[str] = Field(default="#6366f1", pattern="^#[0-9A-Fa-f]{6}$")
     
@@ -63,6 +65,7 @@ class UpdateSubscriptionRequest(BaseModel):
     billing_cycle: Optional[str] = None
     billing_day: Optional[int] = Field(None, ge=1, le=31)
     start_date: Optional[date] = None
+    service_plan_id: Optional[str] = None
     logo_url: Optional[str] = None
     color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
     
@@ -115,6 +118,11 @@ class SubscriptionResponse(BaseModel):
     billing_day: int
     start_date: date
     next_payment_date: Optional[date]
+    service_plan_id: Optional[str] = None
+    # service_plans JOIN'den gelen embed objeyi yakala
+    service_plans: Optional[ServicePlanReadBasic] = Field(None, alias="service_plans")
+    # Akıllı Backend: Zam uyarısı durumu
+    price_alert_status: str = "none"
     logo_url: Optional[str]
     color: str
     is_active: bool

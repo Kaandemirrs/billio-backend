@@ -24,3 +24,6 @@ stripe==7.10.0
 
 # AI Services
 google-cloud-aiplatform
+
+# Scheduler
+APScheduler==3.10.4
