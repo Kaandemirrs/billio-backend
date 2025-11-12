@@ -205,12 +205,16 @@ class SubscriptionService:
             
             if result.data and len(result.data) > 0:
                 inserted_id = result.data[0].get("id")
-                # Join ile geri döndür
+                # Scoped JOIN ile geri döndür (çökme riskini azaltır)
                 joined = self.supabase.table("subscriptions").select(
-                    "*, service_plans(*)"
+                    "*, service_plans(plan_name, cached_price, currency, last_updated_ai)"
                 ).eq("id", inserted_id).execute()
                 if joined.data and len(joined.data) > 0:
-                    return joined.data[0]
+                    subscription = joined.data[0]
+                    # Akıllı Backend: price alert status hesapla
+                    subscription["price_alert_status"] = self._calculate_price_alert_status(subscription)
+                    return subscription
+                # Fallback: JOIN başarısızsa insert sonucu dön
                 return result.data[0]
             
             raise Exception("Abonelik oluşturulamadı")
