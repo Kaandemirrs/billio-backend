@@ -187,39 +187,40 @@ class SubscriptionService:
     ) -> Dict:
         """Yeni abonelik oluştur"""
         try:
-            # user_id ekle
+            # 1. HAZIRLIK: Verileri hazırla
             subscription_data["user_id"] = user_id
-            
-            # Decimal'i float'a çevir
+
             if "amount" in subscription_data:
                 subscription_data["amount"] = float(subscription_data["amount"])
-            
-            # Date'i string'e çevir
+
             if "start_date" in subscription_data:
                 subscription_data["start_date"] = str(subscription_data["start_date"])
-            
-            # Insert
+
+            # 2. İŞLEM: SADECE INSERT (Karmaşık JOIN yok)
             result = self.supabase.table("subscriptions").insert(
                 subscription_data
             ).execute()
-            
+
+            # 3. SONUÇ: Eklenen veriyi güvenli yoldan geri getir
             if result.data and len(result.data) > 0:
                 inserted_id = result.data[0].get("id")
-                # Scoped JOIN ile geri döndür (çökme riskini azaltır)
-                joined = self.supabase.table("subscriptions").select(
-                    "*, service_plans(plan_name, cached_price, currency, last_updated_ai)"
-                ).eq("id", inserted_id).execute()
-                if joined.data and len(joined.data) > 0:
-                    subscription = joined.data[0]
-                    # Akıllı Backend: price alert status hesapla
-                    subscription["price_alert_status"] = self._calculate_price_alert_status(subscription)
-                    return subscription
-                # Fallback: JOIN başarısızsa insert sonucu dön
+
+                # ZATEN ÇALIŞAN FONKSİYONU KULLANIYORUZ
+                created_subscription = await self.get_subscription_by_id(
+                    subscription_id=inserted_id,
+                    user_id=user_id,
+                )
+
+                if created_subscription:
+                    return created_subscription
+
+                # Çok düşük ihtimal ama okuma başarısız olursa ham veriyi dön
                 return result.data[0]
-            
-            raise Exception("Abonelik oluşturulamadı")
-            
+
+            raise Exception("Abonelik oluşturulamadı (Veritabanı yanıt vermedi)")
+
         except Exception as e:
+            print(f"CREATE SUBSCRIPTION ERROR: {str(e)}")
             raise Exception(f"Supabase error: {str(e)}")
     
     async def update_subscription(
