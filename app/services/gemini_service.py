@@ -74,6 +74,36 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Gemini API error: {str(e)}")
             return None
+
+    async def ask_gemini_raw(self, full_prompt: str) -> Optional[str]:
+        """
+        Özel formatlı bir prompt’u (bağlam + talimatlar dahil) doğrudan Gemini’ye gönderir.
+
+        Args:
+            full_prompt (str): Tam prompt metni
+
+        Returns:
+            Optional[str]: Yanıt metni veya None
+        """
+        if not self.model:
+            logger.error("Gemini model not configured")
+            return None
+
+        if not full_prompt or not full_prompt.strip():
+            logger.warning("Empty prompt provided")
+            return None
+
+        try:
+            response = await self._generate_content_async(full_prompt)
+            if response and getattr(response, "text", None):
+                logger.info("Gemini raw response generated successfully")
+                return response.text.strip()
+            else:
+                logger.warning("Empty response from Gemini")
+                return None
+        except Exception as e:
+            logger.error(f"Gemini API error: {str(e)}")
+            return None
     
     def _build_rag_prompt(self, context: str, user_prompt: str) -> str:
         """

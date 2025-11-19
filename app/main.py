@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.v1 import auth, user, subscriptions, analytics, ai, notifications, premium, categories, predefined_bills, services_router
+from app.api.v1.ai_router import router as ai_router
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.services.ai_cron_service import update_all_plan_prices
 from app.core.firebase import initialize_firebase
@@ -301,7 +302,14 @@ app.include_router(notifications.router, prefix=settings.API_V1_PREFIX, tags=["N
 app.include_router(premium.router, prefix=settings.API_V1_PREFIX, tags=["Premium"])
 app.include_router(categories.router, prefix=settings.API_V1_PREFIX, tags=["Categories"])
 app.include_router(predefined_bills.router, prefix=settings.API_V1_PREFIX, tags=["Predefined Bills"])
-app.include_router(services_router.router, prefix=f"{settings.API_V1_PREFIX}/services", tags=["Services & Plans"]) 
+app.include_router(services_router.router, prefix=f"{settings.API_V1_PREFIX}/services", tags=["Services & Plans"])
+
+# AI Analiz Router'ı dahil et (Kapsamlı Analiz)
+app.include_router(
+    ai_router,
+    prefix=settings.API_V1_PREFIX,  # Örn: /api/v1
+    tags=["AI Analysis (Comprehensive)"]
+)
 
 # Startup event
 @app.on_event("startup")

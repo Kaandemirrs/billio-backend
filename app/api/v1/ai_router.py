@@ -9,6 +9,8 @@ from app.models.response import ApiResponse
 from app.models.subscription import SubscriptionResponse
 from app.services.google_search_service import google_search_service
 from app.services.gemini_service import gemini_service
+from app.services.analysis_context_service import analysis_context_service
+from app.services.subscription_service import subscription_service
 from app.services.user_service import user_service
 from app.services.notification_service import notification_service
 from app.services.notification_pusher_service import send_push_notification
@@ -352,6 +354,128 @@ Detaylı analiz için lütfen tekrar deneyin.
         
     except Exception as e:
         logger.error(f"Error in analyze_subscriptions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "ANALYSIS_ERROR",
+                    "message": "Finansal analiz sırasında bir hata oluştu"
+                }
+            }
+        )
+
+@router.post("/analysis", response_model=ApiResponse)
+async def analysis(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    RAG destekli finansal analiz – indirim ve tasarruf odaklı 10 maddelik rapor üretir.
+
+    İç bağlam: Kullanıcının aktif abonelikleri + AI’ın cached_price kayıtları
+    Dış bağlam: Google aramasından indirim/fırsat odaklı sonuçlar
+    """
+    try:
+        firebase_uid = current_user.get("uid")
+        logger.info(f"Comprehensive analysis request from user {firebase_uid}")
+
+        # User ID al
+        user = await user_service.get_user_by_firebase_uid(firebase_uid)
+        if not user or not user.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "error": {
+                        "code": "USER_NOT_FOUND",
+                        "message": "Kullanıcı bulunamadı"
+                    }
+                }
+            )
+        user_id = user.get("id")
+
+        # 1) İç bağlamı topla (aktif abonelikler + cached prices)
+        internal_context = await analysis_context_service.get_comprehensive_analysis_context(user_id)
+
+        # 2) İndirim odaklı Google aramasını hazırla (abonelik isimlerinden)
+        #    Mevcut abonelik listesi için isimleri al
+        subs_result = await subscription_service.get_subscriptions(
+            user_id=user_id,
+            is_active=True,
+            page=1,
+            limit=100
+        )
+        subs = subs_result.get("subscriptions", []) if isinstance(subs_result, dict) else []
+        user_bill_names = [s.get("name") for s in subs if s.get("name")]
+
+        search_query = google_search_service.generate_discount_opportunities_query(user_bill_names)
+
+        # 3) Google’da ara – indirim ve tasarruf fırsatları
+        google_results = await google_search_service.search_google(
+            search_query,
+            num_results=5,
+            gl="tr",
+            lr="lang_tr"
+        )
+
+        external_context_parts: List[str] = []
+        if google_results:
+            for i, r in enumerate(google_results, 1):
+                title = r.get("title", "")
+                snippet = r.get("snippet", "")
+                link = r.get("link", "")
+                external_context_parts.append(
+                    f"Kaynak {i}: {title} - {snippet} ({link})"
+                )
+        external_context = "\n".join(external_context_parts) if external_context_parts else "İndirim bilgisi bulunamadı."
+
+        # 4) Gemini için özel prompt’u hazırla (tamamen yeni format)
+        full_prompt = f"""
+BAĞLAM (İÇ):
+{internal_context}
+
+BAĞLAM (DIŞ - İNDİRİM VE FIRSATLAR):
+{external_context}
+
+GÖREV: Sen bir finansal analist yapay zekasın. Sana kullanıcının mevcut fatura listesi ve güncel piyasa fiyatları (BAĞLAM) verildi. Görevin, kullanıcının kâr etmesi ve tasarruf etmesi için yüksek etkili 10 öneri sunmaktır.
+
+ODAĞIN:
+1) Kullanıcının kendi fiyatı ile cached_price arasındaki farkı gösteren uyarılar.
+2) İndirim kodları / kampanya fırsatları (Google sonuçlarından).
+3) Alternatif plan veya hizmet önerileri (daha ucuz seçenekler).
+
+KURALLAR:
+- Türkçe yanıt ver.
+- Yapılandırılmış, anlaşılır rapor üret; başlık ve numaralı 10 madde kullan.
+- Her maddede kısa gerekçe ve mümkünse tahmini aylık/yıllık tasarruf aralığı belirt.
+- BAĞLAM’da bulunmayan bilgiyi uydurma; yetersizse “bağlamda yeterli kanıt yok” de.
+- Sonunda “Hızlı Özet” bölümünde en kritik 3 aksiyonu listele.
+
+YANIT:
+"""
+
+        # 5) Gemini’ye gönder (özel raw prompt)
+        report_text = await gemini_service.ask_gemini_raw(full_prompt)
+        if not report_text:
+            report_text = "Bağlamdan faydalanarak 10 maddelik bir tasarruf raporu üretilemedi. Lütfen daha sonra tekrar deneyin."
+
+        logger.info(f"Comprehensive analysis completed for user {firebase_uid}")
+
+        return {
+            "success": True,
+            "message": "Analiz tamamlandı",
+            "data": {
+                "report_text": report_text,
+                "search_query": search_query,
+                "sources_found": len(google_results or []),
+                "format": "text_report"
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in analysis: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

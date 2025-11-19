@@ -15,6 +15,17 @@ class GoogleSearchService:
             logger.warning("Google Search API key not configured in settings (GOOGLE_SEARCH_API_KEY)")
         if not self.search_engine_id:
             logger.warning("Google Search Engine ID not configured in settings (GOOGLE_SEARCH_ENGINE_ID)")
+
+    def generate_discount_opportunities_query(self, user_bills_names: List[str]) -> str:
+        """
+        Kullanıcının abonelik isimlerinden indirim ve tasarruf odaklı bir arama sorgusu oluşturur.
+
+        Örnek Template:
+        "{user_bills_names} abonelik indirimleri, alternatif fiyatlar ve tasarruf fırsatları"
+        """
+        cleaned = [name.strip() for name in (user_bills_names or []) if isinstance(name, str) and name.strip()]
+        joined = ", ".join(cleaned) if cleaned else "abonelik"
+        return f"{joined} abonelik indirimleri, alternatif fiyatlar ve tasarruf fırsatları"
     
     async def search_google(self, query: str, num_results: int = 5, gl: Optional[str] = None, lr: Optional[str] = None) -> List[Dict]:
         """
