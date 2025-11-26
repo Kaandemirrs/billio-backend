@@ -14,13 +14,28 @@ class SubscriptionService:
         alert_status = "none"
         try:
             sp = subscription.get("service_plans")
-            if sp:
-                user_amount = Decimal(str(subscription.get("amount", 0)))
-                cached = sp.get("cached_price")
-                if cached is not None:
-                    cached_price = Decimal(str(cached))
-                    if cached_price > 0 and user_amount != cached_price:
-                        alert_status = "update_required"
+
+            # amount None ise güvenli çıkış
+            amount_value = subscription.get("amount")
+            if amount_value is None:
+                return "none"
+
+            # amount'ı güvenli şekilde Decimal'e çevir
+            user_amount = Decimal(str(amount_value))
+
+            # service_plans veya cached_price yoksa uyarı yok
+            if not sp:
+                return "none"
+
+            cached = sp.get("cached_price")
+            if cached is None:
+                return "none"
+
+            # cached_price'ı güvenli şekilde Decimal'e çevir
+            cached_price = Decimal(str(cached))
+
+            if cached_price > 0 and user_amount != cached_price:
+                alert_status = "update_required"
         except Exception:
             alert_status = "none"
         return alert_status
@@ -125,7 +140,12 @@ class SubscriptionService:
             currency = "TRY"
             
             for sub in result.data:
-                amount = Decimal(str(sub.get("amount", 0)))
+                # amount None olabilir; güvenli dönüşüm uygula
+                amount_value = sub.get("amount")
+                try:
+                    amount = Decimal(str(amount_value)) if amount_value is not None else Decimal(0)
+                except Exception:
+                    amount = Decimal(0)
                 cycle = sub.get("billing_cycle", "monthly")
                 is_active = sub.get("is_active", True)
                 currency = sub.get("currency", "TRY")
