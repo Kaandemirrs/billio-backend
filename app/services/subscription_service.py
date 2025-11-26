@@ -10,35 +10,36 @@ class SubscriptionService:
         self.supabase = get_supabase_admin_client()
 
     def _calculate_price_alert_status(self, subscription: Dict) -> str:
-        """"Senaryo 2: Zam Uyarısı" mantığını hesaplar."""
-        alert_status = "none"
+        """
+        "Senaryo 2: Zam Uyarısı" mantığını hesaplar.
+        Hata durumunda sistemi çökertmez, 'none' döner ve hatayı loglar.
+        """
         try:
-            sp = subscription.get("service_plans")
-
-            # amount None ise güvenli çıkış
-            amount_value = subscription.get("amount")
-            if amount_value is None:
+            # 1. Güvenlik Kontrolü: service_plans var mı?
+            plans = subscription.get("service_plans")
+            if not plans:
                 return "none"
 
-            # amount'ı güvenli şekilde Decimal'e çevir
-            user_amount = Decimal(str(amount_value))
-
-            # service_plans veya cached_price yoksa uyarı yok
-            if not sp:
+            # 2. Fiyat Kontrolü: cached_price var mı?
+            cached_price_val = plans.get("cached_price")
+            if cached_price_val is None:
                 return "none"
 
-            cached = sp.get("cached_price")
-            if cached is None:
-                return "none"
+            # 3. Dönüşüm (En riskli yer burasıdır)
+            # Gelen veriyi önce string'e sonra Decimal'e çevirerek güvenliği artır.
+            user_amount = Decimal(str(subscription.get("amount", 0)))
+            cached_price = Decimal(str(cached_price_val))
 
-            # cached_price'ı güvenli şekilde Decimal'e çevir
-            cached_price = Decimal(str(cached))
-
+            # 4. Mantık Kontrolü
             if cached_price > 0 and user_amount != cached_price:
-                alert_status = "update_required"
-        except Exception:
-            alert_status = "none"
-        return alert_status
+                return "update_required"
+
+            return "none"
+
+        except Exception as e:
+            # KRİTİK: Hatayı yutma, loga yaz ama sistemi çökertme.
+            print(f"⚠️ ALERT CALCULATION ERROR (Sub ID: {subscription.get('id')}): {str(e)}")
+            return "none"
     
     async def get_subscriptions(
         self,
