@@ -34,7 +34,7 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        query = f"{service_name} {plan_name} fiyatı 2025"
+        query = f"{service_name} Türkiye {plan_name} aylık ücret fiyatı 2025"
         print(f"[SmartPriceService] Google araması başlatılıyor. Sorgu: {query}")
         logger.info(f"SmartPriceService Google search query: {query}")
 
@@ -88,8 +88,13 @@ class SmartPriceService:
         print(f"[SmartPriceService] Gemini'ye gidecek snippet metni: {context_text}")
 
         system_prompt = (
-            "Sen bir fiyat çıkarma botusun. Sana verilen metinden sadece güncel aylık fiyatı bul "
-            "ve sadece sayı olarak döndür (Örn: 229.99). Başka hiçbir metin yazma."
+            f"Sen bir fiyat analiz uzmanısın. Görevin: Aşağıdaki metin içinden "
+            f"SADECE '{service_name}' servisine ait '{plan_name}' (veya en yakın eşleşen plan) "
+            f"için geçerli AYLIK fiyatı bul.\n"
+            f"Kurallar:\n"
+            f"1. Sadece Türkiye (TL) fiyatını al.\n"
+            f"2. Yanıt olarak SADECE sayıyı ver (Örn: 229.99). Para birimi veya metin yazma.\n"
+            f"3. Eğer metinde '{plan_name}' için net bir fiyat yoksa veya emin değilsen '0' döndür. Asla tahmin yapma."
         )
 
         full_prompt = f"{system_prompt}\n\nMETİN:\n{context_text}"
@@ -111,12 +116,16 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        price_decimal = _extract_decimal(str(raw_response))
+        raw_text = str(raw_response).strip()
+        if raw_text == "0":
+            price_decimal = Decimal(0)
+        else:
+            price_decimal = _extract_decimal(raw_text)
 
         print(f"[SmartPriceService] Parse edilen fiyat: {price_decimal}")
         logger.info(f"SmartPriceService parsed price: {price_decimal}")
 
-        if price_decimal is None:
+        if price_decimal is None or price_decimal == 0:
             confidence = "low"
             price_value = None
         else:
@@ -179,4 +188,3 @@ def _extract_decimal(text: str) -> Optional[Decimal]:
 
 
 smart_price_service = SmartPriceService()
-
