@@ -25,5 +25,7 @@ stripe==7.10.0
 # AI Services
 google-cloud-aiplatform
 
+tavily-python
+
 # Scheduler
 APScheduler==3.10.4

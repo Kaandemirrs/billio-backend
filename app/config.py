@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     GOOGLE_SEARCH_API_KEY: Optional[str] = None
     GOOGLE_SEARCH_ENGINE_ID: Optional[str] = None
     VERTEX_AI_SERVICE_ACCOUNT_JSON: Optional[str] = None
+    TAVILY_API_KEY: Optional[str] = None
 
     # API
     API_V1_PREFIX: str = "/api/v1"

@@ -3,7 +3,9 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional
 import logging
 
-from app.services.google_search_service import google_search_service
+from tavily import TavilyClient
+
+from app.config import settings
 from app.services.gemini_service import gemini_service
 
 
@@ -21,7 +23,9 @@ OFFICIAL_DOMAINS: Dict[str, List[str]] = {
 
 class SmartPriceService:
     def __init__(self) -> None:
-        self.official_domains = OFFICIAL_DOMAINS
+        if not settings.TAVILY_API_KEY:
+            logger.error("TAVILY_API_KEY not configured in settings")
+        self.tavily = TavilyClient(api_key=settings.TAVILY_API_KEY or "")
 
     async def find_price(self, service_name: str, plan_name: str) -> Dict[str, Any]:
         if not service_name or not plan_name:
@@ -34,38 +38,27 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        query = f"{service_name} Türkiye {plan_name} aylık ücret fiyatı 2025"
-        print(f"[SmartPriceService] Google araması başlatılıyor. Sorgu: {query}")
-        logger.info(f"SmartPriceService Google search query: {query}")
-
-        results = await google_search_service.search_google(
-            query=query,
-            num_results=6,
-            gl="tr",
-            lr="lang_tr",
-            hl="tr",
-        )
-
-        print(f"[SmartPriceService] Google araması tamamlandı. Toplam sonuç: {len(results)}")
-        logger.info(f"SmartPriceService Google search returned {len(results)} results")
-
-        if not results:
-            print("[SmartPriceService] Google aramasından sonuç dönmedi")
-            return {
-                "price": None,
-                "currency": "TRY",
-                "source": None,
-                "confidence": "low",
-            }
-
         service_key = _normalize_service_key(service_name)
-        official_results = self._filter_official_results(results, service_key)
+        query = f"{service_name} {plan_name} fiyatı Türkiye 2025"
 
-        print(f"[SmartPriceService] Resmi domain filtrelemesi sonrası sonuç sayısı: {len(official_results)}")
-        logger.info(f"SmartPriceService official results count: {len(official_results)}")
+        print(f"[SmartPriceService] Tavily araması başlatılıyor. Sorgu: {query}")
+        logger.info(f"SmartPriceService Tavily search query: {query}")
 
-        if not official_results:
-            print("[SmartPriceService] Resmi domain ile eşleşen sonuç bulunamadı")
+        tavily_kwargs: Dict[str, Any] = {
+            "query": query,
+            "search_depth": "advanced",
+            "max_results": 1,
+        }
+
+        include_domains = OFFICIAL_DOMAINS.get(service_key)
+        if include_domains:
+            tavily_kwargs["include_domains"] = include_domains
+
+        try:
+            response = self.tavily.search(**tavily_kwargs)
+        except Exception as e:
+            print(f"[SmartPriceService] Tavily araması hata verdi: {str(e)}")
+            logger.error(f"SmartPriceService Tavily error: {str(e)}")
             return {
                 "price": None,
                 "currency": "TRY",
@@ -73,19 +66,33 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        snippets = []
-        primary_source: Optional[str] = None
-        for idx, r in enumerate(official_results, start=1):
-            title = r.get("title", "")
-            snippet = r.get("snippet", "")
-            link = r.get("link", "")
-            if not primary_source and link:
-                primary_source = link
-            snippets.append(snippet)
-            print(f"[SmartPriceService] Resmi kaynak {idx}: {title} | {link}")
+        if not response or not isinstance(response, dict):
+            print("[SmartPriceService] Tavily yanıtı geçersiz")
+            logger.warning("SmartPriceService Tavily response invalid")
+            return {
+                "price": None,
+                "currency": "TRY",
+                "source": None,
+                "confidence": "low",
+            }
 
-        context_text = "\n".join(snippets)
-        print(f"[SmartPriceService] Gemini'ye gidecek snippet metni: {context_text}")
+        results = response.get("results") or []
+        if not results:
+            print("[SmartPriceService] Tavily sonuç döndürmedi")
+            logger.info("SmartPriceService Tavily returned no results")
+            return {
+                "price": None,
+                "currency": "TRY",
+                "source": None,
+                "confidence": "low",
+            }
+
+        first_result = results[0] or {}
+        content = first_result.get("content") or ""
+        primary_source: Optional[str] = first_result.get("url")
+
+        print(f"[SmartPriceService] Tavily'den gelen içerik uzunluğu: {len(content)}")
+        logger.info(f"SmartPriceService Tavily content length: {len(content)}")
 
         system_prompt = (
             f"Sen bir fiyat analiz uzmanısın. Görevin: Aşağıdaki metin içinden "
@@ -97,7 +104,7 @@ class SmartPriceService:
             f"3. Eğer metinde '{plan_name}' için net bir fiyat yoksa veya emin değilsen '0' döndür. Asla tahmin yapma."
         )
 
-        full_prompt = f"{system_prompt}\n\nMETİN:\n{context_text}"
+        full_prompt = f"{system_prompt}\n\nMETİN:\n{content}"
 
         print(f"[SmartPriceService] Gemini isteği hazırlanıyor")
         logger.info("SmartPriceService sending prompt to Gemini for price extraction")
@@ -138,32 +145,6 @@ class SmartPriceService:
             "source": primary_source,
             "confidence": confidence,
         }
-
-    def _filter_official_results(
-        self,
-        results: List[Dict[str, Any]],
-        service_key: str,
-    ) -> List[Dict[str, Any]]:
-        official_domains = self.official_domains.get(service_key)
-
-        filtered: List[Dict[str, Any]] = []
-        for r in results:
-            link = (r.get("link") or "").lower()
-            display_link = (r.get("displayLink") or "").lower()
-
-            if official_domains:
-                if any(d in link or d in display_link for d in official_domains):
-                    filtered.append(r)
-            else:
-                if service_key and (
-                    service_key in link
-                    or service_key in display_link
-                    or link.startswith(f"{service_key}.")
-                    or display_link.startswith(f"{service_key}.")
-                ):
-                    filtered.append(r)
-
-        return filtered
 
 
 def _normalize_service_key(name: str) -> str:
