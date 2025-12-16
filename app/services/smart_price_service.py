@@ -12,15 +12,6 @@ from app.services.gemini_service import gemini_service
 logger = logging.getLogger(__name__)
 
 
-OFFICIAL_DOMAINS: Dict[str, List[str]] = {
-    "netflix": ["netflix.com"],
-    "spotify": ["spotify.com"],
-    "exxen": ["exxen.com"],
-    "disneyplus": ["disneyplus.com", "disneyplus.com.tr"],
-    "amazonprimevideo": ["primevideo.com", "amazon.com"],
-}
-
-
 class SmartPriceService:
     def __init__(self) -> None:
         if not settings.TAVILY_API_KEY:
@@ -38,8 +29,7 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        service_key = _normalize_service_key(service_name)
-        query = f"{service_name} {plan_name} fiyatı Türkiye 2025"
+        query = f"{service_name} {plan_name} üyelik ücreti fiyatı 2025 Türkiye güncel"
 
         print(f"[SmartPriceService] Tavily araması başlatılıyor. Sorgu: {query}")
         logger.info(f"SmartPriceService Tavily search query: {query}")
@@ -47,12 +37,8 @@ class SmartPriceService:
         tavily_kwargs: Dict[str, Any] = {
             "query": query,
             "search_depth": "advanced",
-            "max_results": 3,
+            "max_results": 5,
         }
-
-        include_domains = OFFICIAL_DOMAINS.get(service_key)
-        if include_domains:
-            tavily_kwargs["include_domains"] = include_domains
 
         try:
             response = self.tavily.search(**tavily_kwargs)
@@ -116,13 +102,13 @@ class SmartPriceService:
         logger.info(f"SmartPriceService Tavily combined content length: {len(combined_content)}")
 
         system_prompt = (
-            f"Sen bir fiyat analiz uzmanısın. Görevin: Aşağıdaki metin içinden "
-            f"SADECE '{service_name}' servisine ait '{plan_name}' (veya en yakın eşleşen plan) "
-            f"için geçerli AYLIK fiyatı bul.\n"
-            f"Kurallar:\n"
-            f"1. Sadece Türkiye (TL) fiyatını al.\n"
-            f"2. Yanıt olarak SADECE sayıyı ver (Örn: 229.99). Para birimi veya metin yazma.\n"
-            f"3. Eğer metinde '{plan_name}' için net bir fiyat yoksa veya emin değilsen '0' döndür. Asla tahmin yapma."
+            "Sen bir fiyat araştırma asistanısın. Aşağıda farklı kaynaklardan "
+            "(haber siteleri, bloglar, resmi siteler) arama sonuçları var. "
+            "Görevin:\n"
+            "1. Bu metinler arasındaki EN GÜNCEL (2025) ve ortak fiyatı tespit et.\n"
+            "2. Eski (2024 veya öncesi) fiyatları yoksay.\n"
+            "3. Sadece Türkiye (TL) fiyatını bul.\n"
+            "4. Yanıt olarak sadece sayıyı ver (Örn: 229.99). Para birimi veya ek metin yazma."
         )
 
         full_prompt = f"{system_prompt}\n\nMETİN:\n{combined_content}"
@@ -166,10 +152,6 @@ class SmartPriceService:
             "source": primary_source,
             "confidence": confidence,
         }
-
-
-def _normalize_service_key(name: str) -> str:
-    return re.sub(r"\s+|\+", "", name or "").lower()
 
 
 def _extract_decimal(text: str) -> Optional[Decimal]:
