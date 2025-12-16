@@ -47,7 +47,7 @@ class SmartPriceService:
         tavily_kwargs: Dict[str, Any] = {
             "query": query,
             "search_depth": "advanced",
-            "max_results": 1,
+            "max_results": 3,
         }
 
         include_domains = OFFICIAL_DOMAINS.get(service_key)
@@ -87,12 +87,33 @@ class SmartPriceService:
                 "confidence": "low",
             }
 
-        first_result = results[0] or {}
-        content = first_result.get("content") or ""
-        primary_source: Optional[str] = first_result.get("url")
+        contents: List[str] = []
+        primary_source: Optional[str] = None
+        for idx, r in enumerate(results, start=1):
+            r = r or {}
+            c = r.get("content") or ""
+            if not c:
+                continue
+            contents.append(c)
+            if not primary_source:
+                primary_source = r.get("url")
+            print(f"[SmartPriceService] Tavily sonucu {idx} içerik uzunluğu: {len(c)}")
 
-        print(f"[SmartPriceService] Tavily'den gelen içerik uzunluğu: {len(content)}")
-        logger.info(f"SmartPriceService Tavily content length: {len(content)}")
+        if not contents:
+            print("[SmartPriceService] Tavily sonuçlarında içerik bulunamadı")
+            logger.info("SmartPriceService Tavily results had no content")
+            return {
+                "price": None,
+                "currency": "TRY",
+                "source": primary_source,
+                "confidence": "low",
+            }
+
+        combined_content = "\n\n".join(contents)
+
+        print(f"[SmartPriceService] Tavily birleşik içerik uzunluğu: {len(combined_content)}")
+        print(f"[SmartPriceService] Tavily Raw Content: {combined_content[:500]}...")
+        logger.info(f"SmartPriceService Tavily combined content length: {len(combined_content)}")
 
         system_prompt = (
             f"Sen bir fiyat analiz uzmanısın. Görevin: Aşağıdaki metin içinden "
@@ -104,7 +125,7 @@ class SmartPriceService:
             f"3. Eğer metinde '{plan_name}' için net bir fiyat yoksa veya emin değilsen '0' döndür. Asla tahmin yapma."
         )
 
-        full_prompt = f"{system_prompt}\n\nMETİN:\n{content}"
+        full_prompt = f"{system_prompt}\n\nMETİN:\n{combined_content}"
 
         print(f"[SmartPriceService] Gemini isteği hazırlanıyor")
         logger.info("SmartPriceService sending prompt to Gemini for price extraction")
@@ -154,7 +175,7 @@ def _normalize_service_key(name: str) -> str:
 def _extract_decimal(text: str) -> Optional[Decimal]:
     m = re.search(r"(\d{1,5}[\.,]\d{1,2})", text)
     if not m:
-        m2 = re.search(r"(\d{2,6})", text)
+        m2 = re.search(r"(\d{3,6})", text)
         if not m2:
             return None
         try:
